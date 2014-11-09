@@ -10,7 +10,7 @@ local awful        = require("awful")
 local beautiful    = require("beautiful")
 local naughty      = require("naughty")
 
-local io           = { popen = io.popen }
+local io           = { popen = io.popen, open = io.open }
 local os           = { date = os.date }
 local tonumber     = tonumber
 
@@ -44,40 +44,74 @@ function cpupower:attach(widget, args)
   cpupower.position = args.position or "top_right"
   widget:connect_signal('mouse::enter', function() cpupower:show(0, scr_pos) end)
   widget:connect_signal('mouse::leave', function() cpupower:hide() end)
-  widget:buttons(awful.util.table.join(awful.button({ }, 2, function()
-    cpupower:menu()
-  end)))
+  widget:buttons(awful.util.table.join(
+    awful.button({ }, 1, function() cpupower:menu() end))
+  )
 end
 
-function cpupower:menu()
+function current_freq()
+  -- wczytaj /proc/cpuinfo, wez pierwsza odczytana wartosc
+  local fp = io.open('/proc/cpuinfo')
+  for line in fp:lines() do
+    local freq
+    freq = string.match(line, 'cpu MHz%s+:%s+(%d+.%d+)')
+    -- naughty.notify({text = 'L=' .. line }) 
+    if freq ~= nil then
+      return tonumber(string.gsub(freq, '%.', ''), 10)
+    end
+  end
+end
+
+function mhz_string(freq)
+  local freq = tonumber(freq, 10)
+  local repr
+  if freq > 1e6 then
+    repr = string.format('%.2f GHz', freq / 1e6)
+  else
+    repr = string.format('%.2f MHz', freq / 1e3)
+  end
+  return string.gsub(string.gsub(repr, '0+%s', ' '), '%. ', ' ')
+end
+
+function cpupower:build_menu()
   cpupower:hide()
   -- 1. /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies
   local freqs = {}
   local governors = {}
   local fp = io.open('/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies', 'r')
-  while true do
-    local f = fp:read('*n')
-    if f ~= nil then
-      freqs[#freqs+1] = f
-    else
-      break
-    end
+  for line in fp:lines('*n') do
+    freqs[#freqs+1] = line
   end
   fp:close()
   -- 2. /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors
   fp = io.open('/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors', 'r')
-  while true do
-    -- nie ma read word, trzeba splitowac
-    local f = fp:read('*n')
-    if f ~= nil then
-      freqs[#freqs+1] = f
-    else
-      break
-    end
-  end
+  -- TODO
   fp:close()
-
+  local freq_items = {}
+  local menu = awful.menu.new()
+  for i, freq in ipairs(freqs) do
+    local freq = tonumber(freq)
+    local label = mhz_string(freq)
+    local theme
+    if freq == current_freq() then
+      theme = {}
+    else
+      theme = {font = beautiful.get().font .. ' bold'}
+    end
+    -- freq_items[#freq_items + 1] = { label, function() try_set_freq(freq) end }
+    menu:add({theme = theme, text = label, cmd = function() try_set_freq(freq) end })
+  end
+  local governor_items = {}
+  -- return awful.menu.new({items = freq_items })
+  return menu
 end
 
+function cpupower:menu()
+  if cpupower.menulist == nil then
+    cpupower.menulist = cpupower:build_menu()
+  end
+
+  cpupower.menulist:toggle()
+end
 
 return setmetatable(cpupower, { __call = function(_, ...) return create(...) end })
