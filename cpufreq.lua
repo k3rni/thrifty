@@ -4,6 +4,14 @@
 -- ## Allow cpufreq commands for anybody
 -- Cmnd_AliasCPUFREQ = /usr/bin/cpupower 
 -- ALL ALL=(ALL) NOPASSWD: CPUFREQ
+--
+-- You obviously also need the cpupower utilities. For Arch, OpenSuse and Mageia,
+-- install the 'cpupower' package. For Fedora, it's 'kernel-tools'. 
+-- Debian, Ubuntu and Mint need 'cpufrequtils', and require different commands, not supported yet.
+--
+-- Usage: put this in $HOME/.config/awesome, and add these after creating your cpu widget
+-- local cpupower  = require('cpufreq')
+-- cpupower:attach(cpuwidget, { ))
 
 local awful        = require("awful")
 local naughty      = require("naughty")
