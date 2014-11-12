@@ -1,13 +1,14 @@
 -- The cpupower tools need root priviledges. To make this script work,
 -- put these lines in a file under /etc/sudoers.d or just add them near
 -- the end of /etc/sudoers (using `visudo`)
--- ## Allow cpufreq commands for anybody
--- Cmnd_AliasCPUFREQ = /usr/bin/cpupower 
+--
+-- ## Allow cpufreq commands for anybody (both cpupower and cpufreq style)
+-- Cmnd_Alias CPUFREQ = /usr/bin/cpupower, /usr/bin/cpufreq-set
 -- ALL ALL=(ALL) NOPASSWD: CPUFREQ
 --
 -- You obviously also need the cpupower utilities. For Arch, OpenSuse and Mageia,
 -- install the 'cpupower' package. For Fedora, it's 'kernel-tools'. 
--- Debian, Ubuntu and Mint need 'cpufrequtils', and require different commands, not supported yet.
+-- Debian, Ubuntu and Mint need 'cpufrequtils', with slightly different commands.
 --
 -- Usage: put this in $HOME/.config/awesome, and add these after creating your cpu widget
 -- local cpupower  = require('cpufreq')
@@ -19,9 +20,32 @@ local io           = { popen = io.popen, open = io.open }
 local os           = { date = os.date }
 local tonumber     = tonumber
 
-local cpupower = {path = '/sys/devices/system/cpu/cpu0/',
-                  command = 'sudo cpupower'}
+local cpupower = setup_cpufreq_tools()
+cpupower.path = '/sys/devices/system/cpu/cpu0/' 
 local cpupower_notification = nil
+local cpupower_tools = {
+  cpupower = { 
+    info_command = 'cpupower frequency-info',
+    set_command = 'sudo cpupower frequency-set' },
+  cpufreq = { 
+    info_command = 'cpufreq-info',
+    set_command = 'sudo cpufreq-set' },
+  not_installed = {
+    info_command = "echo Required tools not installed, see cpufreq.lua header for details",
+    set_command = '/bin/false' }
+  }
+
+function setup_cpufreq_tools(style)
+  -- just use whatever is available
+  for _, flavor in ipairs({'cpupower', 'cpufreq'}) do
+    local fp = io.popen(commands.detect_command)
+    local text = fp:read()
+    if text ~= "" then
+      return cpupower_tools[flavor]
+    end
+  end
+  return cpupower_tools.not_installed
+end
 
 -- hide the notification, useful when we want to show the menu
 function cpupower:hide()
@@ -37,7 +61,7 @@ end
 function cpupower:show(timeout, scr)
   cpupower:hide()
   local f, text
-  f = io.popen('cpupower frequency-info')
+  f = io.popen(cpupower.info_command)
   text = '<tt>' .. f:read('*a') .. '</tt>'
   f:close()
 
@@ -175,19 +199,19 @@ end
 -- use cpupower command to set scaling parameters
 -- display whatever is returned as a popup
 function cpupower:set_governor(governor)
-  local fp = io.popen(cpupower.command .. ' frequency-set --governor ' .. governor)
+  local fp = io.popen(cpupower.set_command .. ' --governor ' .. governor)
   naughty.notify({text = fp:read('*a')})
   fp:close()
 end
 
 function cpupower:set_lower_limit(freq)
-  local fp = io.popen(cpupower.command .. ' frequency-set --min ' .. freq)
+  local fp = io.popen(cpupower.set_command .. ' --min ' .. freq)
   naughty.notify({text = fp:read('*a')})
   fp:close()
 end
 
 function cpupower:set_upper_limit(freq)
-  local fp = io.popen(cpupower.command .. ' frequency-set --max ' .. freq)
+  local fp = io.popen(cpupower.set_command .. ' --max ' .. freq)
   naughty.notify({text = fp:read('*a')})
   fp:close()
 end
